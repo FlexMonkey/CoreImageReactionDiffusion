@@ -16,7 +16,7 @@ class ViewController: UIViewController {
     let accumulator = CIImageAccumulator(extent: CGRect(x: 0, y: 0, width: 640, height: 640), format: kCIFormatARGB8)
     let grayScottFilter = GrayScottFilter()
     
-    let glassDistortion = CIFilter(name: "CIEdges",
+    let edgesFilter = CIFilter(name: "CIEdges",
         withInputParameters: [kCIInputIntensityKey: 50])!
     
     lazy var imageView: GLKView =
@@ -63,11 +63,11 @@ class ViewController: UIViewController {
     {
         let yellow = CIImage(color: CIColor(color: UIColor.yellowColor()))
         let noise = CIFilter(name: "CIRandomGenerator")!
-        
+
         let crop = CIFilter(name: "CICrop",
             withInputParameters: [kCIInputImageKey: noise.outputImage!,
                 "inputRectangle": CIVector(CGRect: rect640x640.insetBy(dx: 250, dy: 250))])!
-        
+
         let composite = CIFilter(name: "CISourceAtopCompositing",
             withInputParameters: [kCIInputBackgroundImageKey: yellow,
                 kCIInputImageKey:crop.outputImage!])!
@@ -92,22 +92,24 @@ class ViewController: UIViewController {
 
 extension ViewController: GLKViewDelegate
 {
-    func glkView(view: GLKView, drawInRect rect: CGRect)
+func glkView(view: GLKView, drawInRect rect: CGRect)
+{
+    for _ in 0 ..< 5
     {
-        for _ in 0 ..< 5
-        {
-            grayScottFilter.setValue(accumulator.image(), forKey: kCIInputImageKey)
-            accumulator.setImage(grayScottFilter.outputImage)
-        }
-        
-        glassDistortion.setValue(accumulator.image(), forKey: kCIInputImageKey)
-
-        ciContext.drawImage(glassDistortion.outputImage!,
-            inRect: CGRect(x: 0, y: 0,
-                width: imageView.drawableWidth,
-                height: imageView.drawableHeight),
-            fromRect: rect640x640)
+        grayScottFilter.setValue(accumulator.image(),
+            forKey: kCIInputImageKey)
+        accumulator.setImage(grayScottFilter.outputImage)
     }
+    
+    edgesFilter.setValue(accumulator.image(),
+        forKey: kCIInputImageKey)
+
+    ciContext.drawImage(edgesFilter.outputImage!,
+        inRect: CGRect(x: 0, y: 0,
+            width: imageView.drawableWidth,
+            height: imageView.drawableHeight),
+        fromRect: rect640x640)
+}
 }
 
 // MARK: GrayScottFilter
@@ -128,10 +130,10 @@ class GrayScottFilter: CIFilter
         
         "vec2 d = destCoord();" +
         
-        "vec2 northSample = sample(image, samplerTransform(image, d + vec2(0.0,-1.0))).xz;" +
-        "vec2 southSample = sample(image, samplerTransform(image, d + vec2(0.0,1.0))).xz;" +
-        "vec2 eastSample = sample(image, samplerTransform(image, d + vec2(1.0,0.0))).xz;" +
-        "vec2 westSample = sample(image, samplerTransform(image, d + vec2(-1.0,0.0))).xz;" +
+        "vec2 northSample = sample(image, samplerTransform(image, d + vec2(0.0,-1.0))).rb;" +
+        "vec2 southSample = sample(image, samplerTransform(image, d + vec2(0.0,1.0))).rb;" +
+        "vec2 eastSample = sample(image, samplerTransform(image, d + vec2(1.0,0.0))).rb;" +
+        "vec2 westSample = sample(image, samplerTransform(image, d + vec2(-1.0,0.0))).rb;" +
         
         "vec2 thisSample = sample(image, samplerCoord(image)).xz;" +
         
@@ -146,22 +148,22 @@ class GrayScottFilter: CIFilter
         "}"
     )
     
-    override var outputImage : CIImage!
+override var outputImage : CIImage!
+{
+    if let inputImage = inputImage,
+        grayScottKernel = grayScottKernel
     {
-        if let inputImage = inputImage,
-            grayScottKernel = grayScottKernel
-        {
-            let arguments = [inputImage, D_a, D_b, k, f]
-            let extent = inputImage.extent
-        
-            return grayScottKernel.applyWithExtent(extent,
-                roiCallback:
-                {
-                    (index, rect) in
-                    return rect
-                },
-                arguments: arguments)
-        }
-        return nil
+        let arguments = [inputImage, D_a, D_b, k, f]
+        let extent = inputImage.extent
+    
+        return grayScottKernel.applyWithExtent(extent,
+            roiCallback:
+            {
+                (index, rect) in
+                return rect
+            },
+            arguments: arguments)
     }
+    return nil
+}
 }
